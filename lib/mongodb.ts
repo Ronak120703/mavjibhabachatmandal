@@ -1,16 +1,23 @@
 import mongoose from 'mongoose';
 
+type MongooseConnection = typeof mongoose | null;
+type MongoosePromise = Promise<typeof mongoose> | null;
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __mongooseCache: {
+    conn: MongooseConnection;
+    promise: MongoosePromise;
+  } | undefined;
+}
+
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mavjibha-bachat-mandal';
 
 if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
 }
 
-let cached = global.mongoose;
-
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
+const cached = globalThis.__mongooseCache || (globalThis.__mongooseCache = { conn: null, promise: null });
 
 async function connectDB() {
   if (cached.conn) {
