@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getMembers, addMember, updateMember, deleteMember } from '@/utils/api';
+import { getMembers, addMember, updateMember, deleteMember, getAdminSession } from '@/utils/api';
 import { Member } from '@/types';
 import Link from 'next/link';
 import { 
@@ -23,6 +23,7 @@ export default function MembersPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -32,6 +33,7 @@ export default function MembersPage() {
 
   useEffect(() => {
     loadMembers();
+    getAdminSession().then(({ isAdmin }) => setIsAdmin(!!isAdmin)).catch(() => setIsAdmin(false));
   }, []);
 
   const loadMembers = async () => {
@@ -126,7 +128,7 @@ export default function MembersPage() {
             <p className="text-gray-600">Manage your family group members</p>
           </div>
         </div>
-        {!showAddForm && (
+        {!showAddForm && isAdmin && (
           <button
             onClick={() => setShowAddForm(true)}
             className="btn-primary flex items-center"
@@ -300,18 +302,27 @@ export default function MembersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleEdit(member)}
-                        className="text-primary-600 hover:text-primary-900 mr-3"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(member.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {isAdmin ? (
+                        <>
+                          <button
+                            onClick={() => handleEdit(member)}
+                            className="text-primary-600 hover:text-primary-900 mr-3"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(member.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-end space-x-3 opacity-50">
+                          <Edit className="h-4 w-4 text-gray-300" />
+                          <Trash2 className="h-4 w-4 text-gray-300" />
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -384,18 +395,27 @@ export default function MembersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleEdit(member)}
-                        className="text-primary-600 hover:text-primary-900 mr-3"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(member.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {isAdmin ? (
+                        <>
+                          <button
+                            onClick={() => handleEdit(member)}
+                            className="text-primary-600 hover:text-primary-900 mr-3"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(member.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-end space-x-3 opacity-50">
+                          <Edit className="h-4 w-4 text-gray-300" />
+                          <Trash2 className="h-4 w-4 text-gray-300" />
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

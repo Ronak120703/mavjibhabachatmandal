@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getDraws, getMembers, getPayments, addPayment, updatePayment } from '@/utils/api';
+import { getDraws, getMembers, getPayments, addPayment, updatePayment, getAdminSession } from '@/utils/api';
 import { Draw, Member, Payment } from '@/types';
 import Link from 'next/link';
 import { 
@@ -24,9 +24,11 @@ export default function PaymentsPage() {
   const [selectedDraw, setSelectedDraw] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     loadData();
+    getAdminSession().then(({ isAdmin }) => setIsAdmin(!!isAdmin)).catch(() => setIsAdmin(false));
   }, []);
 
   // Remove the automatic payment creation useEffect to prevent duplicates
@@ -478,16 +480,18 @@ export default function PaymentsPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {payment.status === 'completed' ? (
                       <button
-                        onClick={() => handleStatusToggle(payment.id, payment.status, payment)}
-                        className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200"
+                        onClick={isAdmin ? () => handleStatusToggle(payment.id, payment.status, payment) : undefined}
+                        disabled={!isAdmin}
+                        className={`inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md ${isAdmin ? 'text-yellow-700 bg-yellow-100 hover:bg-yellow-200' : 'text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'}`}
                       >
                         <XCircle className="h-4 w-4 mr-1" />
                         Mark Pending
                       </button>
                     ) : (
                       <button
-                        onClick={() => handleStatusToggle(payment.id, payment.status, payment)}
-                        className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200"
+                        onClick={isAdmin ? () => handleStatusToggle(payment.id, payment.status, payment) : undefined}
+                        disabled={!isAdmin}
+                        className={`inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md ${isAdmin ? 'text-green-700 bg-green-100 hover:bg-green-200' : 'text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'}`}
                       >
                         <CheckCircle className="h-4 w-4 mr-1" />
                         Mark Complete

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getMembers, getDraws, getGoldPrice, formatCurrency, formatDate, adminReset } from '@/utils/api';
+import { getMembers, getDraws, getGoldPrice, formatCurrency, formatDate, adminReset, getAdminSession, adminLogout } from '@/utils/api';
 import { Member, Draw, GoldPrice, DrawStats } from '@/types';
 import Link from 'next/link';
 import { 
@@ -14,8 +14,10 @@ import {
   BarChart3,
   Crown,
   TrendingUp,
-  Database,
-  RotateCcw
+  RotateCcw,
+  LogIn,
+  LogOut,
+  User
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -24,10 +26,12 @@ export default function HomePage() {
   const [goldPrice, setGoldPrice] = useState<GoldPrice | null>(null);
   const [stats, setStats] = useState<DrawStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initializing, setInitializing] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     loadData();
+    // Check admin session
+    getAdminSession().then(({ isAdmin }) => setIsAdmin(!!isAdmin)).catch(() => setIsAdmin(false));
   }, []);
 
   const loadData = async () => {
@@ -50,30 +54,7 @@ export default function HomePage() {
     }
   };
 
-  const initializeSampleData = async () => {
-    try {
-      setInitializing(true);
-      const response = await fetch('/api/init', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        alert(`Sample data initialized successfully! ${result.membersAdded || result.membersCount} members added.`);
-        await loadData(); // Reload data
-      } else {
-        alert('Failed to initialize sample data');
-      }
-    } catch (error) {
-      console.error('Error initializing data:', error);
-      alert('Failed to initialize sample data');
-    } finally {
-      setInitializing(false);
-    }
-  };
+  
 
   const handleAdminReset = async () => {
     const confirmReset = confirm('⚠️ ADMIN ACTION: This will delete ALL draw and payment data. Are you sure you want to reset everything? This action cannot be undone.');
@@ -92,6 +73,12 @@ export default function HomePage() {
       console.error('Error resetting data:', error);
       alert('❌ Error resetting data. Please check the console for details.');
     }
+  };
+
+  const handleLogout = async () => {
+    await adminLogout();
+    setIsAdmin(false);
+    alert('Logged out');
   };
 
   const calculateStats = (allMembers: Member[], allDraws: Draw[]) => {
@@ -152,43 +139,32 @@ export default function HomePage() {
           Monthly Lucky Draw System for Gold Distribution
         </p>
         
-        {/* Admin Reset Icon */}
-        <button
-          onClick={handleAdminReset}
-          className="absolute top-0 right-0 p-2 text-gray-400 hover:text-red-500 transition-colors"
-          title="Admin: Reset all draw and payment data"
-        >
-          <RotateCcw className="h-5 w-5" />
-        </button>
+        {/* Admin Actions */}
+        {isAdmin ? (
+          <div className="absolute top-0 right-0 flex items-center space-x-2">
+            <button
+              onClick={handleAdminReset}
+              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+              title="Admin: Reset all draw and payment data"
+            >
+              <RotateCcw className="h-5 w-5" />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-gray-400 hover:text-gray-700 transition-colors"
+              title="Logout admin"
+            >
+              <User className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          <Link href="/admin" className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-700 transition-colors" title="Admin sign in">
+            <LogIn className="h-5 w-5" />
+          </Link>
+        )}
       </div>
 
-      {/* Initialize Data Button (only show if no members) */}
-      {members.length === 0 && (
-        <div className="card mb-8 text-center">
-          <Database className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No Data Found</h2>
-          <p className="text-gray-600 mb-4">
-            It looks like this is your first time using the system. Initialize with sample data to get started.
-          </p>
-          <button
-            onClick={initializeSampleData}
-            disabled={initializing}
-            className="btn-primary flex items-center mx-auto"
-          >
-            {initializing ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Initializing...
-              </>
-            ) : (
-              <>
-                <Database className="h-5 w-5 mr-2" />
-                Initialize Sample Data
-              </>
-            )}
-          </button>
-        </div>
-      )}
+      
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -303,14 +279,16 @@ export default function HomePage() {
                 {stats.totalDraws}
               </span>
             </div>
-            <div className="mt-4">
-              <Link 
-                href="/draw"
-                className="btn-primary w-full text-center block"
-              >
-                Conduct New Draw
-              </Link>
-            </div>
+            {isAdmin && (
+              <div className="mt-4">
+                <Link 
+                  href="/draw"
+                  className="btn-primary w-full text-center block"
+                >
+                  Conduct New Draw
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -350,15 +328,17 @@ export default function HomePage() {
           </div>
         </Link>
 
-        <Link href="/draw" className="card hover:shadow-lg transition-shadow">
-          <div className="flex items-center">
-            <Trophy className="h-8 w-8 text-gold-600 mr-3" />
-            <div>
-              <h3 className="font-semibold text-gray-900">Conduct Draw</h3>
-              <p className="text-sm text-gray-600">Select monthly winner</p>
+        {isAdmin && (
+          <Link href="/draw" className="card hover:shadow-lg transition-shadow">
+            <div className="flex items-center">
+              <Trophy className="h-8 w-8 text-gold-600 mr-3" />
+              <div>
+                <h3 className="font-semibold text-gray-900">Conduct Draw</h3>
+                <p className="text-sm text-gray-600">Select monthly winner</p>
+              </div>
             </div>
-          </div>
-        </Link>
+          </Link>
+        )}
 
         <Link href="/payments" className="card hover:shadow-lg transition-shadow">
           <div className="flex items-center">

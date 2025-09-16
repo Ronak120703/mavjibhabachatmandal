@@ -136,6 +136,25 @@ export const adminReset = async (): Promise<boolean> => {
   }
 };
 
+// Admin session helpers
+export const getAdminSession = async (): Promise<{ isAdmin: boolean }> => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/admin/session`);
+    return response.data;
+  } catch (error) {
+    return { isAdmin: false };
+  }
+};
+
+export const adminLogout = async (): Promise<boolean> => {
+  try {
+    await axios.delete(`${API_BASE_URL}/admin/login`);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
 // Utility Functions
 export const getActiveMembers = async (): Promise<Member[]> => {
   try {

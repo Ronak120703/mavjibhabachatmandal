@@ -9,7 +9,9 @@ import {
   generateQRCodeUrl,
   formatCurrency,
   formatDate,
-  updateGoldPrice
+  updateGoldPrice,
+  getAdminSession,
+  adminLogout
 } from '@/utils/api';
 import { Member, Draw } from '@/types';
 import Link from 'next/link';
@@ -20,8 +22,8 @@ import {
   Coins, 
   RefreshCw,
   Crown,
-  QrCode,
-  Download,
+  
+  
   Share2,
   Calendar,
   TrendingUp,
@@ -39,9 +41,12 @@ export default function DrawPage() {
   const [customGoldPrice10Gram, setCustomGoldPrice10Gram] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [selectedManualMemberId, setSelectedManualMemberId] = useState<string>('');
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   useEffect(() => {
     loadData();
+    getAdminSession().then(({ isAdmin }) => setIsAdmin(!!isAdmin)).catch(() => setIsAdmin(false));
   }, []);
 
   const loadData = async () => {
@@ -74,13 +79,13 @@ export default function DrawPage() {
       const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
       
       // Check if draw exists for this month
-      const response = await fetch(`/api/draws?month=${currentMonth}`);
-      if (response.ok) {
-        const existingDraws = await response.json();
-        if (existingDraws.length > 0) {
-          setError(`❌ Monthly Draw Limit Reached!\n\nA draw for ${currentMonth} has already been conducted.\n\n📅 Only one draw is allowed per month.\n⏰ Please wait until next month (15th) to conduct another draw.\n\n🏆 Previous winner: ${existingDraws[0].winnerName}`);
-        }
-      }
+      // const response = await fetch(`/api/draws?month=${currentMonth}`);
+      // if (response.ok) {
+      //   const existingDraws = await response.json();
+      //   if (existingDraws.length > 0) {
+      //     setError(`❌ Monthly Draw Limit Reached!\n\nA draw for ${currentMonth} has already been conducted.\n\n📅 Only one draw is allowed per month.\n⏰ Please wait until next month (15th) to conduct another draw.\n\n🏆 Previous winner: ${existingDraws[0].winnerName}`);
+      //   }
+      // }
     } catch (error) {
       console.error('Error loading data:', error);
       setError('Failed to load data. Please check your connection and try again.');
@@ -201,16 +206,60 @@ export default function DrawPage() {
     }, animationInterval);
   };
 
-  const downloadQRCode = () => {
-    if (currentDraw) {
-      const link = document.createElement('a');
-      link.href = currentDraw.qrCodeUrl;
-      link.download = `payment-qr-${currentDraw.month}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+  const conductManualDraw = async () => {
+    if (!selectedManualMemberId) {
+      alert('Please select a member to conduct manual draw.');
+      return;
+    }
+
+    const selectedWinner = eligibleMembers.find(m => m.id === selectedManualMemberId);
+    if (!selectedWinner) {
+      alert('Selected member not found in eligible list.');
+      return;
+    }
+
+    try {
+      setIsDrawing(true);
+      setError('');
+
+      const totalAmount = goldPricePerGram * 20;
+      const amountPerMember = calculateAmountPerMember(goldPricePerGram, activeMembersCount);
+
+      const currentDate = new Date();
+      const month = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+      const newDraw: Omit<Draw, 'id'> = {
+        month,
+        date: currentDate.toISOString(),
+        winnerId: selectedWinner.id,
+        winnerName: selectedWinner.name,
+        goldPricePerGram: goldPricePerGram,
+        totalAmount,
+        amountPerMember,
+        qrCodeUrl: generateQRCodeUrl(amountPerMember, Date.now().toString()),
+        isCompleted: false,
+      };
+
+      const createdDraw = await createDraw(newDraw);
+      if (!createdDraw) {
+        throw new Error('Failed to create draw record');
+      }
+
+      setWinner(selectedWinner);
+      setCurrentDraw(createdDraw);
+      setShowResults(true);
+
+      await createPaymentRecordsForDraw(createdDraw);
+    } catch (e) {
+      console.error('Error in manual draw:', e);
+      setError('Failed to conduct manual draw. Please try again.');
+      alert('Failed to conduct manual draw. Please check the console for details.');
+    } finally {
+      setIsDrawing(false);
     }
   };
+
+  
 
   const shareResults = () => {
     if (currentDraw && winner) {
@@ -327,6 +376,15 @@ export default function DrawPage() {
             <p className="text-gray-600">Conduct monthly lucky draw for gold distribution</p>
           </div>
         </div>
+        {isAdmin && (
+          <button
+            onClick={async () => { await adminLogout(); window.location.href = '/'; }}
+            className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+            title="Logout admin"
+          >
+            Logout
+          </button>
+        )}
       </div>
 
       {/* Error Message */}
@@ -432,68 +490,98 @@ export default function DrawPage() {
             </div>
           </div>
 
-          {/* Draw Button */}
-          <div className="text-center">
-            {eligibleMembers.length > 0 ? (
-              <div className="space-y-4">
-                <button
-                  onClick={conductDraw}
-                  disabled={isDrawing}
-                  className="btn-primary text-xl px-8 py-4 flex items-center mx-auto"
-                >
-                  {isDrawing ? (
-                    <>
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                      Drawing...
-                    </>
-                  ) : (
-                    <>
-                      <Trophy className="h-6 w-6 mr-3" />
-                      Conduct Lucky Draw
-                    </>
-                  )}
-                </button>
-                
-                {/* Random Selection Indicator */}
-                {isDrawing && (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-center justify-center space-x-2 mb-2">
-                      <div className="animate-pulse w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <div className="animate-pulse w-2 h-2 bg-blue-500 rounded-full" style={{animationDelay: '0.1s'}}></div>
-                      <div className="animate-pulse w-2 h-2 bg-blue-500 rounded-full" style={{animationDelay: '0.2s'}}></div>
-                    </div>
-                    <p className="text-sm text-blue-700 text-center">
-                      Randomly selecting winner from {eligibleMembers.length} eligible members...
-                    </p>
-                    {winner && (
-                      <p className="text-xs text-blue-600 text-center mt-1">
-                        Currently showing: <span className="font-medium">{winner.name}</span>
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Crown className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No Eligible Members</h3>
-                <p className="text-gray-600 mb-4">
-                  All active members have already won the lucky draw.
-                </p>
-                <div className="space-x-4">
-                  <Link href="/members" className="btn-primary">
-                    Manage Members
-                  </Link>
-                  <button 
-                    onClick={loadData}
-                    className="btn-secondary"
+          {/* Draw Actions */}
+          {isAdmin && (
+            <div className="text-center">
+              {eligibleMembers.length > 0 ? (
+                <div className="space-y-4">
+                  <button
+                    onClick={conductDraw}
+                    disabled={isDrawing}
+                    className="btn-primary text-xl px-8 py-4 flex items-center mx-auto"
                   >
-                    Refresh Data
+                    {isDrawing ? (
+                      <>
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                        Drawing...
+                      </>
+                    ) : (
+                      <>
+                        <Trophy className="h-6 w-6 mr-3" />
+                        Conduct Lucky Draw
+                      </>
+                    )}
                   </button>
+                  {/* Random Selection Indicator */}
+                  {isDrawing && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-center space-x-2 mb-2">
+                        <div className="animate-pulse w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <div className="animate-pulse w-2 h-2 bg-blue-500 rounded-full" style={{animationDelay: '0.1s'}}></div>
+                        <div className="animate-pulse w-2 h-2 bg-blue-500 rounded-full" style={{animationDelay: '0.2s'}}></div>
+                      </div>
+                      <p className="text-sm text-blue-700 text-center">
+                        Randomly selecting winner from {eligibleMembers.length} eligible members...
+                      </p>
+                      {winner && (
+                        <p className="text-xs text-blue-600 text-center mt-1">
+                          Currently showing: <span className="font-medium">{winner.name}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Manual Draw */}
+                  <div className="card mt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-semibold text-gray-900">Manual Draw</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Select member</label>
+                        <select
+                          className="input-field w-full"
+                          value={selectedManualMemberId}
+                          onChange={(e) => setSelectedManualMemberId(e.target.value)}
+                        >
+                          <option value="">-- Choose eligible member --</option>
+                          {eligibleMembers.map(m => (
+                            <option key={m.id} value={m.id}>{m.name} ({m.phone})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        onClick={conductManualDraw}
+                        disabled={isDrawing || !selectedManualMemberId}
+                        className="btn-secondary w-full"
+                      >
+                        Conduct Manual Draw
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Crown className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Eligible Members</h3>
+                  <p className="text-gray-600 mb-4">
+                    All active members have already won the lucky draw.
+                  </p>
+                  <div className="space-x-4">
+                    <Link href="/members" className="btn-primary">
+                      Manage Members
+                    </Link>
+                    <button 
+                      onClick={loadData}
+                      className="btn-secondary"
+                    >
+                      Refresh Data
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </>
       ) : (
         /* Results Section */
@@ -552,38 +640,7 @@ export default function DrawPage() {
             </div>
           </div>
 
-          {/* Payment QR Code */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Payment QR Code</h3>
-              <QrCode className="h-5 w-5 text-green-600" />
-            </div>
-            <div className="text-center">
-              <p className="text-gray-600 mb-4">
-                Each member needs to pay: <span className="font-semibold text-primary-600">
-                  {formatCurrency(currentDraw?.amountPerMember || 0)}
-                </span>
-              </p>
-              {currentDraw && (
-                <div className="inline-block p-4 bg-white border rounded-lg">
-                  <img
-                    src={currentDraw.qrCodeUrl}
-                    alt="Payment QR Code"
-                    className="w-48 h-48"
-                  />
-                </div>
-              )}
-              <div className="mt-4">
-                <button
-                  onClick={downloadQRCode}
-                  className="btn-secondary flex items-center mx-auto"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download QR Code
-                </button>
-              </div>
-            </div>
-          </div>
+          
 
           {/* Draw Details */}
           <div className="card mt-8">
@@ -603,7 +660,7 @@ export default function DrawPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Members:</p>
-                <p className="font-medium">30</p>
+                <p className="font-medium">{activeMembersCount}</p>
               </div>
             </div>
           </div>
