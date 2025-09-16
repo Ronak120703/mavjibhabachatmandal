@@ -38,6 +38,7 @@ export const initializeData = () => {
   // Initialize gold price if not exists
   if (!localStorage.getItem(STORAGE_KEYS.GOLD_PRICE)) {
     const defaultGoldPrice: GoldPrice = {
+      id: 'default',
       pricePerGram: 6000, // Default price in INR
       lastUpdated: new Date().toISOString(),
       currency: 'INR',
@@ -126,6 +127,7 @@ export const updateDraw = (id: string, updates: Partial<Draw>): Draw | null => {
 export const getGoldPrice = (): GoldPrice => {
   if (typeof window === 'undefined') {
     return {
+      id: 'default',
       pricePerGram: 6000,
       lastUpdated: new Date().toISOString(),
       currency: 'INR',
@@ -133,6 +135,7 @@ export const getGoldPrice = (): GoldPrice => {
   }
   const price = localStorage.getItem(STORAGE_KEYS.GOLD_PRICE);
   return price ? JSON.parse(price) : {
+    id: 'default',
     pricePerGram: 6000,
     lastUpdated: new Date().toISOString(),
     currency: 'INR',
@@ -141,6 +144,7 @@ export const getGoldPrice = (): GoldPrice => {
 
 export const updateGoldPrice = (pricePerGram: number): GoldPrice => {
   const goldPrice: GoldPrice = {
+    id: 'default',
     pricePerGram,
     lastUpdated: new Date().toISOString(),
     currency: 'INR',
